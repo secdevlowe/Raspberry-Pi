@@ -1,0 +1,46 @@
+https://fuzzthepiguy.tech/uplexa/
+
+Algorithm: CryptoNight UPX2
+
+North Europe (Finland ): uplexa.herominers.com:10471
+Central Europe (Germany ): de.uplexa.herominers.com:10471
+North America (Canada ): ca.uplexa.herominers.com:10471
+Asia (HongKong ): hk.uplexa.herominers.com:10471
+SouthEast Asia (Singapore ): sg.uplexa.herominers.com:10471
+sudo apt update
+sudo apt upgrade
+
+sudo apt install git cmake libuv1-dev libmicrohttpd-dev libssl-dev 
+
+git clone https://github.com/uPlexa/xmrig-upx.git
+--------------------------------------------------
+Do The Following To Build The Miner:
+
+cd xmrig-upx
+mkdir build 
+cd build 
+cmake .. 
+make
+
+-----------------------------------
+To Mine:
+
+cd xmrig-upx/build
+./xmrig 
+sudo nano config.json 
+
+"And Add The Following Code" "Update Wallet Address And Rig ID"
+"pool_list": [
+    {
+        "pool_address": "upxpool.com:2222", # Pool Address Here
+        "wallet_address": "WALLET ADDRESS HERE",
+        "rig_id": "WORKER NAME HERE",
+        "pool_password": "x",
+        "use_nicehash": false,
+        "use_tls": false, /* Set to true if you are using an SSL port */
+        "tls_fingerprint": "",
+        "pool_weight": 1
+    },
+],
+"currency": "cryptonight-upx/2",
+./xmrig -t 4 -o upxpool.com:2222 -u WALLET ADDRESS HERE -p x -a cryptonight-upx/2 --donate 1  --rig-id=RIG ID HERE
