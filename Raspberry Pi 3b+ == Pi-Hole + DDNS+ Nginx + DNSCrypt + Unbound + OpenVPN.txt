@@ -1,0 +1,244 @@
+https://www.reddit.com/r/pihole/comments/mo4rvl/raspberry_pi_3b_pihole_ddns_nginx_dnscrypt/
+
+Hey Good afternoon;
+Today I managed to make my pi-hole work the way I wanted it after many tests.
+I'm using the following
+Pi-Hole + DDNS (I have dynamic IP) + Nginx (Redirect a website)
++ DNSCrypt (For DOH) + Unbound + OpenVPN 
+I can choose between DOH or Unbound just by changing the door. 
+--------------------------------
+sudo apt-get update
+sudo apt-get upgrade
+===================================================
+######################################################
+#  ===================> NGINX <===================   #
+######################################################
+https://engineerworkshop.com/blog/setup-an-nginx-reverse-proxy-on-a-raspberry-pi-or-any-other-debian-os/
+######################################################
+Remember redirect port on your router
+-----------------------
+apt-get install nginx
+-----------------------
+Change NGINX port number change port number 80 to 8080
+-----------------------
+nano /etc/nginx/sites-enabled/default
+-----------------------
+Actual config
+server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+-----------------------
+New config
+server {
+        listen 8080 default_server;
+        listen [::]:8080 default_server;
+-----------------------
+cd /etc/nginx/sites-available
+-----------------------
+nano redirecionador.conf
+
+server {
+	listen 8245;
+	server_name redirecionador;
+	location / {
+	proxy_pass WEBSITE-HERE;
+	}
+}
+-----------------------
+ln -s /etc/nginx/sites-available/redirecionador.conf /etc/nginx/sites-enabled/redirecionador.conf
+-----------------------
+nginx -t --> CHECK ERRORS
+systemctl start nginx
+systemctl enable nginx
+-----------------------
+SCRIPT CRONTAB FOR CHECK AWAYS ON
+-----------------------
+nano /home/pi/CRON_NGINX.sh
+-----------------------
+systemctl is-active nginx
+if [ "$?" -ne 0 ]
+then systemctl restart nginx
+fi
+-----------------------
+chmod +x CRON_NGINX.sh
+-----------------------
+==================================================
+######################################################
+# ===================> PI-HOLE <===================  #
+# ===================> PI-HOLE <===================  #
+######################################################
+curl -sSL https://install.pi-hole.net | bash
+-----------------------
+#######################################################
+# ===================> DNSCRYPT <=================== ##
+#######################################################
+https://www.derekseaman.com/2019/09/how-to-pi-hole-plus-dnscrypt-setup-on-raspberry-pi-4.html
+#######################################################
+======================================================
+cd /opt
+-----------------------
+Check last here => https://github.com/DNSCrypt/dnscrypt-proxy/releases
+-----------------------
+sudo wget https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/2.0.45/dnscrypt-proxy-linux_arm-2.0.45.tar.gz
+-----------------------
+sudo tar -xf dnscrypt-proxy-linux_arm-2.0.45.tar.gz
+sudo mv linux-arm dnscrypt-proxy && cd dnscrypt-proxy
+sudo cp example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+-----------------------------------------------------
+sudo nano dnscrypt-proxy.toml
+
+replace lines:
+listen_addresses = ['127.0.0.1:5053', '[::1]:5053']
+
+Change the following:
+require_dnssec = true   
+require_nofilter = false
+cache = false     (we will use the Pi-Hole cache)
+
+########################################
+#            Static entries            #
+########################################
+[static]
+  # [static.'myserver']
+  # stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
+
+  ## Quad9 (anycast) dnssec/no-log/filter 9.9.9.9 / 149.112.112.9
+  [static.'DOH-QUAD9']
+  stamp = 'sdns://AgMAAAAAAAAABzkuOS45LjkAEmRuczkucXVhZDkubmV0OjQ0MwovZG5zLXF1ZXJ5'
+ 
+  ## Google DNS (anycast)
+  [static.'DOH-GOOGLE']
+  stamp = 'sdns://AgUAAAAAAAAABzguOC44LjigHvYkz_9ea9O63fP92_3qVlRn43cpncfuZnUWbzAMwbkgdoAkR6AZkxo_AEMExT_cbBssN43Evo9zs5_ZyWnftEUKZG5zLmdvb2dsZQovZG5zLXF1ZXJ5'
+-----------------------------------------------------
+Testing DNSCrypt
+
+sudo ./dnscrypt-proxy -service install
+sudo ./dnscrypt-proxy (Check errors, control-C for stop)
+sudo ./dnscrypt-proxy -service start
+sudo systemctl status dnscrypt-proxy
+-----------------------------------------------------
+Testing:
+cd /opt/dnscrypt-proxy
+./dnscrypt-proxy -resolve www.cloudflare.com
+-----------------------------------------------------
+Configuring Pi-Hole for DNSCrypt
+For IPv4: 127.0.0.1#5053
+For IPv6: 1#5053
+-----------------------------------------------------
+############################################
+#           CONFIG - DYNAMIC DNS           #
+############################################
+https://docs.pi-hole.net/guides/vpn/openvpn/dynDNS/
+############################################
+sudo apt install ddclient
+---------------------------------------------------
+sudo nano /etc/ddclient.conf
+
+protocol=dyndns2
+use=web, web=checkip.dyndns.com/, web-skip='IP Address'
+ssl=yes
+server=members.dyndns.org
+login=<USER-HERE>
+password=<PASSWORD-HERE>
+<UR-DOMAIN-HERE>
+---------------------------------------------------
+Testing
+ddclient -daemon=0 -debug
+############################################
+#           INSTALL OPENVPN                #
+############################################
+https://docs.pi-hole.net/guides/vpn/openvpn/setup-openvpn-server/
+############################################
+wget https://git.io/vpn -O openvpn-install.sh
+chmod 755 openvpn-install.sh
+./openvpn-install.sh
+---------------------------------------------------
+nano /etc/openvpn/server/server.conf
+---------------------------------------------------
+Set this line to use your Pi-hole's IP address, which you determined from the ifconfig command and comment out or remove the other line (if it exists):
+
+push "dhcp-option DNS 10.0.0.228"
+#push "dhcp-option DNS 1.1.1.1"
+---------------------------------------------------
+systemctl restart openvpn-server@server
+service openvpn-server@server restart
+---------------------------------------------------
+Crie um arquivo de configuração do cliente
+
+./openvpn-install.sh
+---------------------------------------------------
+############################################
+#           UNBOUND                #
+############################################
+https://docs.pi-hole.net/guides/dns/unbound/
+############################################
+sudo apt install unbound
+
+wget https://www.internic.net/domain/named.root -qO- | sudo tee /var/lib/unbound/root.hints
+
+nano /etc/unbound/unbound.conf.d/pi-hole.conf
+---------------------------------------------------
+server:
+    # If no logfile is specified, syslog is used
+    # logfile: "/var/log/unbound/unbound.log"
+    verbosity: 0
+
+    interface: 127.0.0.1
+    port: 5335
+    do-ip4: yes
+    do-udp: yes
+    do-tcp: yes
+
+    # May be set to yes if you have IPv6 connectivity
+    do-ip6: no
+
+    # You want to leave this to no unless you have *native* IPv6. With 6to4 and
+    # Terredo tunnels your web browser should favor IPv4 for the same reasons
+    prefer-ip6: no
+
+    # Use this only when you downloaded the list of primary root servers!
+    # If you use the default dns-root-data package, unbound will find it automatically
+    #root-hints: "/var/lib/unbound/root.hints"
+
+    # Trust glue only if it is within the server's authority
+    harden-glue: yes
+
+    # Require DNSSEC data for trust-anchored zones, if such data is absent, the zone becomes BOGUS
+    harden-dnssec-stripped: yes
+
+    # Don't use Capitalization randomization as it known to cause DNSSEC issues sometimes
+    # see https://discourse.pi-hole.net/t/unbound-stubby-or-dnscrypt-proxy/9378 for further details
+    use-caps-for-id: no
+
+    # Reduce EDNS reassembly buffer size.
+    # Suggested by the unbound man page to reduce fragmentation reassembly problems
+    edns-buffer-size: 1472
+
+    # Perform prefetching of close to expired message cache entries
+    # This only applies to domains that have been frequently queried
+    prefetch: yes
+
+    # One thread should be sufficient, can be increased on beefy machines. In reality for most users running on small networks or on a single machine, it should be unnecessary to seek performance enhancement by increasing num-threads above 1.
+    num-threads: 1
+
+    # Ensure kernel buffer is large enough to not lose messages in traffic spikes
+    so-rcvbuf: 1m
+
+    # Ensure privacy of local IP ranges
+    private-address: 192.168.0.0/16
+    private-address: 169.254.0.0/16
+    private-address: 172.16.0.0/12
+    private-address: 10.0.0.0/8
+    private-address: fd00::/8
+    private-address: fe80::/10
+---------------------------------------------------
+sudo service unbound restart
+dig pi-hole.net @127.0.0.1 -p 5335
+---------------------------------------------------
+Test
+dig sigfail.verteiltesysteme.net @127.0.0.1 -p 5335
+dig sigok.verteiltesysteme.net @127.0.0.1 -p 5335
+---------------------------------------------------
+Change in Pi-hole
+Configure Pi-hole to use your recursive DNS server by specifying 127.0.0.1#5335 as the Custom DNS (IPv4):
+---------------------------------------------------
