@@ -1,0 +1,75 @@
+Pi-hole is a DNS sinkhole that can block ads and trackers for all devices on your network.
+Stubby is a local DNS Privacy stub resolver, which forwards requests using DNS-over-TLS.
+NextDNS is a privacy-oriented and feature-rich DNS resolver, which supports DNS-over-TLS.
+With this setup, a DNS query traverses: Client > Pi-hole > Stubby > NextDNS / authoritative name server
+
+> Install Pi-hole (if not already):Pi-hole
+
+curl -sSL https://install.pi-hole.net | bash
+Follow the installation script, and confirm it works.
+
+For local testing, you may want to install and use dig:
+
+sudo apt install dnsutils
+dig apple.com
+At the end of the output, note: ;; SERVER: 192.168.178.2#53(192.168.178.2) - this is pi-hole responding on port 53 👍
+
+> Install Stubby:
+
+sudo apt install stubby
+Edit the config file: sudo nano /etc/stubby/stubby.yml
+
+Change the listen_addresses section to:
+
+listen_addresses:
+     
+- address_data: 127.0.0.1
+  port: 5353
+- address_data: 0::1
+  port: 5353
+Change round_robin_upstreams: 1 to round_robin_upstreams: 0, or comment out and add in servers section.
+
+Add a new first entry to the upstream_recursive_servers section, matching your NextDNS account at: my.nextdns.io.
+Find this in the NextDNS Setup Guide section, click the Linux tab. Scroll down to the Stubby section:
+
+round_robin_upstreams: 0
+upstream_recursive_servers:
+
+- address_data: 45.90.28.0
+  tls_auth_name: "pihole-XXXXXX.dns1.nextdns.io"
+- address_data: 2a07:a8c0::0
+  tls_auth_name: "pihole-XXXXXX.dns1.nextdns.io"
+- address_data: 45.90.30.0
+  tls_auth_name: "pihole-XXXXXX.dns2.nextdns.io"
+- address_data: 2a07:a8c1::0
+  tls_auth_name: "pihole-XXXXXX.dns2.nextdns.io"
+pihole-XXXXXX is your NextDNS ID, prefixed with a device name (eg: pihole) to show in the NextDNS logs.
+
+You may also want to comment out (with #) all the other upstream servers, or leave a second server as a backup.
+
+round_robin_upstreams: 0 will use each upstream server sequentially until it becomes unavailable
+round_robin_upstreams: 1 queries across all the configured upstream servers, spreading requests
+When done, save and exit (Ctrl+O Ctrl+X), then restart stubby:
+
+sudo systemctl restart stubby
+If it fails to start, investigate why with: systemctl status stubby.service (or the stubby command).
+
+- the reason is likely to be a syntax error in /etc/stubby/stubby.yml
+When stubby starts without error, test it with a few examples:
+
+dig apple.com @localhost -p 5353
+dig apple.com @121.0.0.1 -p 5353
+dig apple.com @::1 -p 5353
+At the end of the output, note: ;; SERVER: 192.168.178.2#5353(192.168.178.2) or ;; SERVER: ::1#5353(::1) - this is stubby 👍
+
+> Back to pihole. Either edit /etc/pihole/setupVars.conf to add the stubby server:
+
+PIHOLE_DNS_1=127.0.0.1#5353
+PIHOLE_DNS_2=::1#5353
+Or open the pihole web page, and goto Settings > DNS and add the stubby server:pstubby1.png
+You should now start to see entries with the device name (pihole) show in your NextDNS logs:pstubby2.png
+This NextDNS/Stubby configuration uses localhost#5353, we can also install Unbound on localhost#5335.
+
+Note:
+
+If you use Pi-hole regularly, remember to DONATE to the project to help with its continued development.
