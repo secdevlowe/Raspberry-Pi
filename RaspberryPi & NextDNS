@@ -1,0 +1,105 @@
+NextDNS is a privacy-oriented and feature-rich DNS resolver, which supports DNS-over-TLS.
+NextDNS CLI is a DNS53 to DNS-over-HTTPS (DoH) proxy with advanced capabilities to get the most out of the NextDNS service.
+This project configures a Raspberry Pi as a local caching DNS server/forwarder with NextDNS.NextDNS
+
+Setup:
+Use the Raspberry Pi Imager to prepare a 4GB (or bigger) SD card with Raspberry PI OS lite
+Enable SSH, either with sudo raspi-config → “Interfacing Options”, or touch /boot/ssh
+
+Connect Pi to network and power, login with pi / raspberry
+- the password can be changed later with passwd
+
+Update the OS using sudo apt-get update and sudo apt-get upgrade
+
+Install the DNS tools (so we have NSLOOKUP and DIG): sudo apt install dnsutils
+
+Install NextDNS CLI: sh -c 'sh -c "$(curl -sL https://nextdns.io/install)"'
+
+You will need a NextDNS configuration ID to complete the installation.
+- more info here: https://github.com/nextdns/nextdns/wiki
+
+Set static address:
+List IP addresses with ifconfig, record the IP4 network and IPv6 (FD00 global) addresses.
+
+Edit sudo nano /etc/dhcpcd.conf, scroll down to #Example static IP configuration:
+- uncomment and edit the static addresses for your network, save.
+
+# Example static IP configuration:
+#interface eth0
+static ip_address=192.168.178.2/24
+static ip6_address=fd00::9204:e549:2af7:42ad/64       use IPv6 address from ifconfig
+static routers=192.168.178.1                          gateway (router)
+static domain_name_servers=127.0.0.1 ::1              ipv4, ipv6 localhost
+Reboot the Pi sudo reboot, use the new static IP address to log back in.
+- or restart dhcpcd with sudo service dhcpcd restart
+
+Testing:
+Check/edit the NextDNS configuration: sudo nano /etc/nextdns.conf, eg:
+
+timeout 5s
+listen :53                              remove 'localhost' to listen for ANY host
+max-ttl 5s
+report-client-info true
+hardened-privacy false
+use-hosts true
+cache-size 10MB
+discovery-dns 192.168.178.1             query router for device names **
+detect-captive-portals false
+auto-activate true
+max-inflight-requests 256
+setup-router true                       for router/server / not workstation
+control /var/run/nextdns.sock
+log-queries false
+mdns all
+bogus-priv true
+config XXXXXX                           put your NextDNS config ID here
+cache-max-age 0s
+** if router IP is not entered, "Device #" will show in the NextDNS logs instead of devices names.
+Restart the daemon after any changes: sudo nextdns restart
+- for a list of NextDNS commands: nextdns help
+
+Test both IPv4 and IPv6 addresses (from another PC):
+
+$ nslookup apple.com 192.168.178.2                    [name] [ipv4 server]
+Server:   192.168.178.2
+Address:  192.168.178.2#53                      our server responded!
+
+Non-authoritative answer:
+Name: apple.com
+Address: 17.253.144.10
+
+$ nslookup apple.com fd00::9204:e549:2af7:42ad        [name] [ipv6 server]
+Server:   fd00::9204:e549:2af7:42ad
+Address:  fd00::9204:e549:2af7:42ad#53          our server responded!
+
+Non-authoritative answer:
+Name: apple.com
+Address: 17.253.144.10
+Router config:
+Router settings: Generic FRITZ!Box English FRITZ!Box German
+1. Edit the router DHCP configuration to issue the Pi address as DNS server:
+
+DHCP Settings → Local DNS server → enter the Raspberry Pi IPv4 address
+DHCP Settings → Local DNSv6 server → enter the Raspberry Pi IPv6 address
+2. (Optional) Block all outgoing port 53 (DNS) traffic to prevent users from manually changing the DNS servers on their devices:
+
+Create a firewall rule, blocking outgoing traffic to UDP port 53
+Apply this firewall rule to all local network devices
+Update:
+If the router natively supports DNS over TLS (eg, FRITZ!Box), this Pi project is not required. Instead:
+
+Find the router's DNS-over-TLS (DoT) configuration settings, and enable the feature
+Enter:XXXXXX.dns.nextdns.io as server, where XXXXXX is your NextDNS configuration ID
+You can prepend a name which will show in the NextDNS logs, it should only contain a-z, A-Z, 0-9 and -. Use -- for spaces. eg, for "Mikes Router", use Mikes--Router-XXXXXX.dns.nextdns.io as the DNS-over-TLS endpoint.
+
+It's a good idea to block outgoing UDT port 53 to stop devices bypassing the DoT service (shown above).
+
+DoT or DoH?
+The NextDNS CLI is a DNS-over-HTTPS (DoH) proxy. Many routers have built-in support for DNS-over-TLS (DoT), so whats the difference?
+
+DNS-over-TLS (DoT) - encrypts standard DNS queries with TLS, it uniquely uses port 853
+DNS-over-HTTPS (DoH) - uses encrypted HTTP and port 443, the port that all HTTPS traffic uses
+Both are encrypted, so neither can be snooped
+DoT is faster, but can easily be blocked with a firewall rule
+DoH is slower, but can't be blocked as doing so would break the web
+See a discussion here: DoH vs DoT ? I don't get why DoH is getting popular.
