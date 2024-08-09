@@ -1,0 +1,97 @@
+Preparing your Raspberry Pi for Log2RAM
+Before installing Log2RAM and having logs written to RAM instead of memory, we need to prepare our Raspberry Pi’s operating system.
+
+1. Before we get started with Log2RAM, let us update the operating system.
+
+You can update the operating system by using the following two commands.
+
+sudo apt update
+sudo apt full-upgrade
+Copy
+2. For the Log2RAM service to work the best on your Raspberry Pi, they recommend installing the rsync software.
+
+Rsync is a piece of software designed to synchronize the contents between a source and destination folder.
+
+We can install rsync to our Pi by running the following command.
+
+sudo apt install rsync
+Copy
+Installing the Log2RAM Service on a Raspberry Pi
+Setting up and installing Log2RAM to your Raspberry Pi is a straightforward process as the provided scripts handle everything.
+
+Over the next few steps, we will get the Log2RAM service up and running.
+
+3. Now that we have everything we need, let us download the latest version of the log2ram script.
+
+We can use wget to download the archive of the latest code available from the projects GitHub.
+
+wget https://github.com/azlux/log2ram/archive/master.tar.gz -O log2ram.tar.gz
+Copy
+4. With the Log2RAM archive downloaded to your device, we need to extract it.
+
+We can extract the tar archive by making use of the command below.
+
+tar xf log2ram.tar.gz
+Copy
+5. Let us change into the directory that we just freshly extracted using the tar program.
+
+We can change to that directory by running the command below.
+
+cd /home/pi/log2ram-master
+Copy
+6. Finally, we can run the log2ram install script.
+
+This install script copies everything to where they need to be and configures it to start at boot.
+
+sudo ./install.sh
+Copy
+We need to run this command with the superuser so that it has access to system locations.
+
+7. While you now have the log2ram service installed to your Raspberry Pi, it currently isn’t doing anything.
+
+Due to the way Log2RAM works, you will need to restart your Raspberry Pi.
+
+To restart your device, you can use the command below.
+
+sudo reboot
+Copy
+When you reboot your Raspberry Pi, the Log2RAM script will create a mount point at “/var/log” that exists on your RAM.
+
+Every time a program writes to a log file at “/var/log” it will be written to the RAM instead of the SD card.
+
+The script will also make a backup of your log files that are stored at “/var/hdd.log“. This backup will be saved to daily and when your Raspberry Pi is correctly shutdown.
+
+Configuring Log2RAM on your Raspberry Pi
+Now that we have installed the Log2RAM service on to the Raspberry Pi, we can now configure its settings.
+
+1. The config file for Log2RAM is stored at “/etc/log2ram.conf“.
+
+We can begin modifying this file using the nano text editor by using the following command.
+
+sudo nano /etc/log2ram.conf
+Copy
+2. Within this file, there are two options that you want to take note of.
+
+The first option is “SIZE“. Using this option, you can specify the amount of RAM that should be allocated to the mount.
+
+Typically 40 megabytes should be good enough for most users as text files are typically not that large.
+
+However, if you are running software that generates many logs, you might consider increasing this to a larger amount, such as 128M.
+
+SIZE=40M
+Copy
+The other option that you may want to investigate is the “PATH_DISK” option. You can use this option to add additional paths that you wish to have mounted to RAM.
+
+To add additional paths to the RAM disk, separate it by using a semicolon (;). The path must not include the ending forward-slash (/).
+
+PATH_DISK="/var/log"
+Copy
+3. Once you have finished making changes to the config file, you will need to save it.
+
+To save the file, you can press CTRL + X, then Y, followed by the ENTER key.
+
+4. For these changes to take effect, the Raspberry Pi will need to be restarted.
+
+Restarting ensures that your Raspberry Pi’s logs are saved to the disk and that your setting changes take effect.
+
+sudo reboot
