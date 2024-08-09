@@ -1,0 +1,100 @@
+Pi-hole is a DNS sinkhole that can block ads and trackers for all devices on your network.
+Unbound is a validating, recursive, caching DNS resolver. It is designed to be fast and lean.
+With this setup, a DNS query traverses: Client > Pi-hole > Unbound > DNS Root Server / TLD Server / authoritative name server
+
+> Install Pi-hole (if not already):Pi-hole
+
+curl -sSL https://install.pi-hole.net | bash
+Follow the installation script, and confirm it works.
+
+For local testing, you may want to install and use dig:
+
+sudo apt install dnsutils
+dig apple.com
+At the end of the output, note: ;; SERVER: 192.168.178.2#53(192.168.178.2) - this is pi-hole responding on port 53 👍
+
+> Install Unbound:
+
+sudo apt install unbound
+Download the current root hints file, this should be repeated every six months or so:
+
+wget https://www.internic.net/domain/named.root -qO- | sudo tee /var/lib/unbound/root.hints
+Create a configuration file: sudo nano /etc/unbound/unbound.conf.d/pi-hole.conf
+
+Copy and paste the following text into the file...
+
+server:
+    # If no logfile is specified, syslog is used
+    # logfile: "/var/log/unbound/unbound.log"
+    verbosity: 0
+
+    interface: 127.0.0.1
+    interface: ::1
+    port: 5335
+    do-ip4: yes
+    do-udp: yes
+    do-tcp: yes
+
+    # May be set to yes if you have IPv6 connectivity
+    do-ip6: yes
+
+    # You want to leave this to no unless you have *native* IPv6. With 6to4 and
+    # Terredo tunnels your web browser should favor IPv4 for the same reasons
+    prefer-ip6: yes
+
+    # Use this only when you downloaded the list of primary root servers!
+    # If you use the default dns-root-data package, unbound will find it automatically
+    root-hints: "/var/lib/unbound/root.hints"
+
+    # Trust glue only if it is within the server's authority
+    harden-glue: yes
+
+    # Require DNSSEC data for trust-anchored zones, if such data is absent, the zone becomes BOGUS
+    harden-dnssec-stripped: yes
+
+    # Don't use Capitalization randomization as it known to cause DNSSEC issues sometimes
+    # see https://discourse.pi-hole.net/t/unbound-stubby-or-dnscrypt-proxy/9378 for further details
+    use-caps-for-id: no
+
+    # Reduce EDNS reassembly buffer size.
+    # Suggested by the unbound man page to reduce fragmentation reassembly problems
+    edns-buffer-size: 1472
+
+    # Perform prefetching of close to expired message cache entries
+    # This only applies to domains that have been frequently queried
+    prefetch: yes
+
+    # One thread should be sufficient, can be increased on beefy machines. 
+    num-threads: 1
+
+    # Ensure kernel buffer is large enough to not lose messages in traffic spikes
+    so-rcvbuf: 1m
+
+    # Ensure privacy of local IP ranges
+    private-address: 192.168.0.0/16
+    private-address: 169.254.0.0/16
+    private-address: 172.16.0.0/12
+    private-address: 10.0.0.0/8
+    private-address: fd00::/8
+    private-address: fe80::/10
+Save and exit with: Ctrl-o Ctrl-x, then restart unbound:
+
+sudo service unbound restart
+If unbound fails to start, investigate why with: systemctl status unbound.service
+
+When unbound starts without error, test it:
+
+dig apple.com @127.0.0.1 -p 5335
+At the end of the output, note: ;; SERVER: 192.168.178.2#5335(192.168.178.2) - this is unbound (port 5335) 👍
+
+> Back to Pi-hole. Either edit /etc/pihole/setupVars.conf to add the unbound server:
+
+PIHOLE_DNS_1=127.0.0.1#5335
+PIHOLE_DNS_2=::1#5335
+Or open the pihole web page, and goto Settings > DNS and add the unbound server:punbound.png
+This Unbound configuration uses localhost#5335, we can also install NextDNS/Stubby on localhost#5353.
+
+Note:
+
+The pi-hole.conf file above was sourced from the Pi-hole unbound documentation, which is more detailed.
+If you use Pi-hole regularly, remember to DONATE to the project to help with its continued development.
